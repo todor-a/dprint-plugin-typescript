@@ -1,7 +1,13 @@
+use std::sync::Arc;
+use std::sync::OnceLock;
+
 use dprint_core::configuration::*;
 use dprint_core::generate_str_to_from;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::generation::imports::resolved::compile_import_groups;
+use crate::generation::imports::resolved::ResolvedGroups;
 
 #[derive(Clone, PartialEq, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -389,6 +395,27 @@ pub struct ImportGroup {
   pub matchers: ImportGroupMatch,
 }
 
+/// Holds `module.importGroups` in the form the formatter matches against.
+///
+/// Compiling it means building a glob set, which is expensive enough that
+/// doing it per file shows up in a profile, so it happens once per resolved
+/// configuration and is shared from there. Not part of the serialized
+/// configuration — it is derived from `module.importGroups`.
+#[derive(Clone, Default)]
+pub struct ImportGroupsCache(Arc<OnceLock<Option<ResolvedGroups>>>);
+
+impl ImportGroupsCache {
+  pub(crate) fn set(&self, groups: Option<ResolvedGroups>) {
+    let _ = self.0.set(groups);
+  }
+
+  /// Compiles on first use, in case this configuration was built without
+  /// going through `resolve_config`.
+  pub(crate) fn get_or_compile(&self, config: &Configuration) -> Option<&ResolvedGroups> {
+    self.0.get_or_init(|| compile_import_groups(config).0).as_ref()
+  }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Configuration {
@@ -442,6 +469,8 @@ pub struct Configuration {
   pub module_type_imports: TypeImportsMode,
   #[serde(rename = "module.builtinsRuntime", default = "default_builtins_runtime")]
   pub module_builtins_runtime: BuiltinsRuntime,
+  #[serde(skip)]
+  pub module_import_groups_cache: ImportGroupsCache,
   /* ignore comments */
   pub ignore_node_comment_text: String,
   pub ignore_file_comment_text: String,

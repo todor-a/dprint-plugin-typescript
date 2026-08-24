@@ -77,7 +77,7 @@ pub struct Context<'a> {
   #[cfg(debug_assertions)]
   pub last_generated_node_pos: SourcePos,
   pub diagnostics: Vec<GenerateDiagnostic>,
-  pub resolved_import_groups: Option<crate::generation::imports::resolved::ResolvedGroups>,
+  pub resolved_import_groups: Option<&'a crate::generation::imports::resolved::ResolvedGroups>,
 }
 
 impl<'a> Context<'a> {
@@ -89,8 +89,6 @@ impl<'a> Context<'a> {
     config: &'a Configuration,
     external_formatter: Option<&'a ExternalFormatter>,
   ) -> Context<'a> {
-    // diagnostics were already surfaced when the configuration was resolved
-    let (resolved_import_groups, _) = crate::generation::imports::resolved::compile(config);
     Context {
       syntax,
       program,
@@ -114,7 +112,7 @@ impl<'a> Context<'a> {
       #[cfg(debug_assertions)]
       last_generated_node_pos: dprint_swc_ext::common::SourceTextInfoProvider::text_info(&program).range().start.into(),
       diagnostics: Vec::new(),
-      resolved_import_groups,
+      resolved_import_groups: config.module_import_groups_cache.get_or_compile(config),
     }
   }
 

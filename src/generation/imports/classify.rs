@@ -63,13 +63,13 @@ fn is_index_path(src: &str) -> bool {
 mod tests {
   use super::*;
   use crate::configuration::*;
-  use crate::generation::imports::resolved::compile;
+  use crate::generation::imports::resolved::compile_import_groups;
   use dprint_core::configuration::ConfigKeyMap;
 
   fn classify_with(json: serde_json::Value, src: &str, is_type: bool) -> usize {
     let map: ConfigKeyMap = serde_json::from_value(json).unwrap();
     let cfg = resolve_config(map, &Default::default()).config;
-    let r = compile(&cfg).0.unwrap();
+    let r = compile_import_groups(&cfg).0.unwrap();
     classify_import(src, is_type, cfg.module_type_imports, cfg.module_builtins_runtime, &r)
   }
 

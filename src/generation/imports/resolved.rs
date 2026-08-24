@@ -22,7 +22,7 @@ pub struct ResolvedGroups {
 /// Compile config's `module.importGroups` into resolved form, along with any
 /// diagnostics about duplicate categories or invalid globs. The groups are
 /// `None` when the feature is disabled (empty list).
-pub fn compile(config: &Configuration) -> (Option<ResolvedGroups>, Vec<String>) {
+pub fn compile_import_groups(config: &Configuration) -> (Option<ResolvedGroups>, Vec<String>) {
   let mut diagnostics = Vec::new();
   if config.module_import_groups.is_empty() {
     return (None, diagnostics);
@@ -111,7 +111,7 @@ mod tests {
   #[test]
   fn empty_returns_none() {
     let cfg = build(serde_json::json!({}));
-    assert!(compile(&cfg).0.is_none());
+    assert!(compile_import_groups(&cfg).0.is_none());
   }
 
   #[test]
@@ -119,7 +119,7 @@ mod tests {
     let cfg = build(serde_json::json!({
       "module.importGroups": [{ "match": "builtin" }]
     }));
-    let r = compile(&cfg).0.unwrap();
+    let r = compile_import_groups(&cfg).0.unwrap();
     assert_eq!(r.groups.len(), 2);
     assert_eq!(r.unknown_index, 1);
   }
@@ -132,7 +132,7 @@ mod tests {
         { "match": "builtin" }
       ]
     }));
-    let (r, diags) = compile(&cfg);
+    let (r, diags) = compile_import_groups(&cfg);
     let r = r.unwrap();
     assert_eq!(diags.len(), 1);
     assert_eq!(r.groups[0].categories, vec![BuiltinCategory::Builtin]);
@@ -144,7 +144,7 @@ mod tests {
     let cfg = build(serde_json::json!({
       "module.importGroups": [{ "match": { "pattern": "[unclosed" } }, { "match": "external" }]
     }));
-    let (r, diags) = compile(&cfg);
+    let (r, diags) = compile_import_groups(&cfg);
     let r = r.unwrap();
     assert_eq!(diags.len(), 1);
     assert!(diags[0].contains("Invalid glob `[unclosed`"), "{:?}", diags[0]);
@@ -158,7 +158,7 @@ mod tests {
       "module.importGroups": [{ "match": "external" }, { "match": "type" }],
       "module.typeImports": "interleave"
     }));
-    let (_, diags) = compile(&cfg);
+    let (_, diags) = compile_import_groups(&cfg);
     assert!(diags.iter().any(|d| d.contains("type") && d.contains("interleave")));
   }
 }

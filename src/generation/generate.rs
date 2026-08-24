@@ -7480,10 +7480,7 @@ fn get_stmt_groups<'a>(stmts: Vec<Node<'a>>, context: &mut Context<'a>) -> Vec<S
     groups.push(current_group);
   }
 
-  // Take `resolved_import_groups` out of `context` so we can mutably borrow
-  // `context` to mark captured comments handled. Put it back when done.
-  let resolved_opt = context.resolved_import_groups.take();
-  if let Some(resolved) = resolved_opt.as_ref() {
+  if let Some(resolved) = context.resolved_import_groups {
     for g in groups.iter_mut() {
       if g.kind != StmtGroupKind::Imports {
         continue;
@@ -7531,8 +7528,6 @@ fn get_stmt_groups<'a>(stmts: Vec<Node<'a>>, context: &mut Context<'a>) -> Vec<S
       g.sorted_indexes = Some(sorted_indexes);
     }
   }
-  context.resolved_import_groups = resolved_opt;
-
   groups
 }
 

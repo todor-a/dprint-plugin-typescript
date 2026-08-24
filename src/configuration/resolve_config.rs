@@ -135,6 +135,7 @@ pub fn resolve_config(config: ConfigKeyMap, global_config: &GlobalConfiguration)
     module_import_groups: parse_import_groups(&mut config, &mut diagnostics),
     module_type_imports: get_value(&mut config, "module.typeImports", TypeImportsMode::Separate, &mut diagnostics),
     module_builtins_runtime: get_value(&mut config, "module.builtinsRuntime", BuiltinsRuntime::Node, &mut diagnostics),
+    module_import_groups_cache: Default::default(),
     /* ignore comments */
     ignore_node_comment_text: get_value(&mut config, "ignoreNodeCommentText", String::from("dprint-ignore"), &mut diagnostics),
     ignore_file_comment_text: get_value(&mut config, "ignoreFileCommentText", String::from("dprint-ignore-file"), &mut diagnostics),
@@ -341,7 +342,9 @@ pub fn resolve_config(config: ConfigKeyMap, global_config: &GlobalConfiguration)
 
   diagnostics.extend(get_unknown_property_diagnostics(config));
 
-  let (_, compile_diags) = crate::generation::imports::resolved::compile(&resolved_config);
+  // compile once here so formatting never has to, and report what it found
+  let (groups, compile_diags) = crate::generation::imports::resolved::compile_import_groups(&resolved_config);
+  resolved_config.module_import_groups_cache.set(groups);
   for message in compile_diags {
     diagnostics.push(ConfigurationDiagnostic {
       property_name: "module.importGroups".to_string(),
