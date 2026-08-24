@@ -7316,14 +7316,49 @@ fn gen_statements<'a>(inner_range: SourceRange, stmts: Vec<Node<'a>>, context: &
         .map(|sorter| sorter.get_sorted_indexes(stmt_group.nodes.iter().map(|n| Some(*n)), context.program)),
     };
     let subgroup_boundaries = stmt_group.subgroup_boundaries.unwrap_or_default();
+    // The separator computed at index i ends up before the node at OUTPUT
+    // position i once `sort_by_sorted_indexes` runs, so the modes that keep
+    // source blank lines have to look them up between output-adjacent nodes.
+    let source_blank_by_output_slot: Vec<bool> = if has_subgroup_boundaries
+      && matches!(
+        context.config.module_import_groups_newlines_between,
+        NewlinesBetween::AlwaysAndInsideGroups | NewlinesBetween::Ignore
+      ) {
+      let indexes = sorted_indexes.as_ref().unwrap();
+      let mut by_slot: Vec<Option<Node>> = vec![None; nodes_len];
+      for (src_index, node) in stmt_group.nodes.iter().enumerate() {
+        by_slot[*indexes.get(src_index).unwrap_or(&src_index)] = Some(*node);
+      }
+      (0..nodes_len)
+        .map(|slot| slot > 0 && node_helpers::has_separating_blank_line(&by_slot[slot - 1].unwrap(), &by_slot[slot].unwrap(), context.program))
+        .collect()
+    } else {
+      Vec::new()
+    };
     for (i, node) in stmt_group.nodes.into_iter().enumerate() {
       let is_empty_stmt = node.is::<EmptyStmt>();
       if !is_empty_stmt {
         let mut separator_items = PrintItems::new();
         if let Some(last_node) = &last_node {
           separator_items.push_signal(Signal::NewLine);
-          let blank_line = if has_subgroup_boundaries {
-            subgroup_boundaries.binary_search(&i).is_ok()
+          let blank_line = if has_subgroup_boundaries && i > 0 {
+            let at_boundary = subgroup_boundaries.binary_search(&i).is_ok();
+            match context.config.module_import_groups_newlines_between {
+              NewlinesBetween::Always => at_boundary,
+              NewlinesBetween::AlwaysAndInsideGroups => at_boundary || source_blank_by_output_slot[i],
+              NewlinesBetween::Never => false,
+              NewlinesBetween::Ignore => source_blank_by_output_slot[i],
+            }
+          } else if has_subgroup_boundaries {
+            // i == 0 separates the run from whatever precedes it (a statement,
+            // a pinned import), which the modes above do not govern. `always`
+            // keeps forcing a blank line there like it always has; the rest
+            // leave it to the source. The node here is the FIRST IN SOURCE,
+            // which is the right pair for that gap.
+            match context.config.module_import_groups_newlines_between {
+              NewlinesBetween::Always | NewlinesBetween::AlwaysAndInsideGroups => true,
+              NewlinesBetween::Never | NewlinesBetween::Ignore => node_helpers::has_separating_blank_line(&last_node, &node, context.program),
+            }
           } else {
             node_helpers::has_separating_blank_line(&last_node, &node, context.program)
           };
@@ -7467,7 +7502,19 @@ fn get_stmt_groups<'a>(stmts: Vec<Node<'a>>, context: &mut Context<'a>) -> Vec<S
 
     if let Some(group) = current_group.as_mut() {
       let is_same_group = group.kind == stmt_group_kind
-        && (stmt_group_kind == StmtGroupKind::Other || last_end_line.is_none() || last_end_line.unwrap() + 1 >= stmt.start_line_fast(context.program));
+        && match last_end_line {
+          _ if stmt_group_kind == StmtGroupKind::Other => true,
+          None => true,
+          Some(last_end_line) if stmt_group_kind == StmtGroupKind::Imports && context.resolved_import_groups.is_some() => {
+            // when grouping, blank lines between imports are style rather than
+            // structure, so the run only ends at a comment on its own line
+            // (those stay anchored where they are)
+            !stmt
+              .leading_comments_fast(context.program)
+              .any(|comment| comment.start_line_fast(context.program) > last_end_line)
+          }
+          Some(last_end_line) => last_end_line + 1 >= stmt.start_line_fast(context.program),
+        };
       if is_same_group {
         group.nodes.push(stmt);
       } else {

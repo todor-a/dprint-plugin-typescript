@@ -592,6 +592,13 @@ impl ConfigurationBuilder {
     self.insert("module.typeImports", value.to_string().into())
   }
 
+  /// How blank lines are handled between imports when grouping is enabled.
+  ///
+  /// Default: `Always`
+  pub fn module_import_groups_newlines_between(&mut self, value: NewlinesBetween) -> &mut Self {
+    self.insert("module.importGroupsNewlinesBetween", value.to_string().into())
+  }
+
   /// Which runtime's built-in modules count as `builtin`.
   ///
   /// Default: `Node`

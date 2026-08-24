@@ -325,6 +325,29 @@ pub enum TypeImportsMode {
 
 generate_str_to_from![TypeImportsMode, [Separate, "separate"], [Interleave, "interleave"]];
 
+/// How blank lines are handled between imports when `module.importGroups` is
+/// enabled. Mirrors ESLint `import/order`'s `newlines-between`.
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NewlinesBetween {
+  /// Exactly one blank line between groups, none inside a group.
+  Always,
+  /// One blank line between groups; blank lines inside a group are kept.
+  AlwaysAndInsideGroups,
+  /// No blank lines anywhere in the import block.
+  Never,
+  /// Blank lines are neither added nor removed.
+  Ignore,
+}
+
+generate_str_to_from![
+  NewlinesBetween,
+  [Always, "always"],
+  [AlwaysAndInsideGroups, "alwaysAndInsideGroups"],
+  [Never, "never"],
+  [Ignore, "ignore"]
+];
+
 /// Which runtime's built-in modules count as `builtin` for grouping.
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -469,6 +492,8 @@ pub struct Configuration {
   pub module_type_imports: TypeImportsMode,
   #[serde(rename = "module.builtinsRuntime", default = "default_builtins_runtime")]
   pub module_builtins_runtime: BuiltinsRuntime,
+  #[serde(rename = "module.importGroupsNewlinesBetween", default = "default_newlines_between")]
+  pub module_import_groups_newlines_between: NewlinesBetween,
   #[serde(skip)]
   pub module_import_groups_cache: ImportGroupsCache,
   /* ignore comments */
@@ -785,6 +810,10 @@ pub struct Configuration {
 
 fn default_type_imports_mode() -> TypeImportsMode {
   TypeImportsMode::Separate
+}
+
+fn default_newlines_between() -> NewlinesBetween {
+  NewlinesBetween::Always
 }
 
 fn default_builtins_runtime() -> BuiltinsRuntime {

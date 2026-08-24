@@ -55,6 +55,7 @@ This reorders imports across the import block into the listed groups and inserts
 | `module.importGroups` | array | `[]` (off) | Ordered list of groups. Empty disables the feature. |
 | `module.typeImports` | `"separate"` \| `"interleave"` | `"separate"` | Whether `import type` lines form their own category. |
 | `module.builtinsRuntime` | `"node"` \| `"deno"` \| `"bun"` \| `"none"` | `"node"` | Which runtime's built-in module list classifies as `builtin`. |
+| `module.importGroupsNewlinesBetween` | `"always"` \| `"alwaysAndInsideGroups"` \| `"never"` \| `"ignore"` | `"always"` | Blank lines between the grouped imports, mirroring ESLint's `newlines-between`. |
 
 ### Built-in categories
 
@@ -97,10 +98,18 @@ Grouping happens within a contiguous run of import declarations. A run ends at:
 - any non-import statement,
 - a side-effect import (`import "./polyfill"`), which is left in place because its position is usually load-order significant,
 - an import preceded by a `// dprint-ignore` comment (see below),
-- a blank line,
 - **a comment on its own line between two imports.**
 
 Each run is grouped and reordered independently, so imports never move across one of these. The last one is easy to trip over — a stray `// ...` line in the middle of an import block splits it in two, and each half is grouped separately.
+
+Blank lines do **not** end a run: like ESLint, the formatter treats them as style rather than structure, merges across them, and `module.importGroupsNewlinesBetween` decides what the output looks like:
+
+- `"always"` (default) — exactly one blank line between groups, none inside a group.
+- `"alwaysAndInsideGroups"` — blank lines between groups, and blank lines inside a group are kept.
+- `"never"` — no blank lines anywhere in the import block.
+- `"ignore"` — blank lines are neither added nor removed.
+
+Under `"alwaysAndInsideGroups"` and `"ignore"`, a source blank line survives only when the two imports around it are still next to each other after reordering.
 
 ### Pinning an import
 
@@ -123,8 +132,7 @@ The pinned import does not move, and `aaa`/`bbb` still group and sort normally. 
 |---|---|
 | `groups` | `module.importGroups` (strings; nested arrays merge) |
 | `pathGroups` | `{ "pattern": "..." }` entries placed positionally — but see the glob note above, the pattern syntax is not minimatch |
-| `newlines-between: "always"` | Default when feature is enabled |
-| `newlines-between: "never"`/`"ignore"` | Not supported. Turning `module.importGroups` off (`[]`) also turns off the reordering, so there is currently no way to group without the blank lines |
+| `newlines-between` | `module.importGroupsNewlinesBetween` — same four values, camelCased (`"always-and-inside-groups"` is `"alwaysAndInsideGroups"`) |
 | `alphabetize.order: "asc"` | Existing `module.sortImportDeclarations` |
 | `alphabetize.order: "desc"` | Not supported |
 | `groups: ["internal"]` | No equivalent category; use a `{ "pattern": "..." }` group |
@@ -138,5 +146,4 @@ The pinned import does not move, and `aaa`/`bbb` still group and sort normally. 
 - TS `import X = require(...)` not reordered.
 - Imports inside nested `declare module "..."` bodies are not classified.
 - `export ... from "..."` declarations are never grouped. `module.sortExportDeclarations` still applies to them.
-- Blank lines cannot be suppressed between groups; one blank line per boundary is the only mode.
 - There is no ignored-*region* concept, so `// dprint-ignore-start` / `// dprint-ignore-end` only pins the declaration directly after each marker rather than everything between them.
