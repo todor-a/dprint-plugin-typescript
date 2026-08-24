@@ -58,7 +58,21 @@ This reorders imports across the import block into the listed groups and inserts
 
 ### Built-in categories
 
-`builtin`, `external`, `parent`, `sibling`, `index`, `type`, `unknown`.
+Categories are matched against the raw specifier string only — no module resolution happens.
+
+| Category | Matches |
+|---|---|
+| `builtin` | Depends on `module.builtinsRuntime`. `node`: a `node:` prefix or a Node core module name (`fs`, `path/posix`, ...). `deno`: a `node:` prefix only. `bun`: either of those plus a `bun:` prefix. `none`: nothing. |
+| `parent` | `..`, or anything starting with `../`. |
+| `index` | `.`, `./`, or `./index` with an optional `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs`/`.mts`/`.cts` extension. |
+| `sibling` | Anything else starting with `./`. |
+| `type` | An `import type` declaration, when `module.typeImports` is `"separate"`. Takes precedence over the path-based categories above. |
+| `external` | Everything left over. |
+| `unknown` | Nothing — it is the bucket for imports no listed group claims. See below. |
+
+Because `external` is the fallthrough, it also claims specifiers that other tools categorize separately: Deno's `npm:`, `jsr:` and `https://` specifiers, and Node subpath imports like `#internal/foo`. There is no `internal` category; use a pattern group for those.
+
+`unknown` only matters when you leave a category out of your list. Imports that match no group land in the `unknown` group, which is appended at the end unless you place `{ "match": "unknown" }` somewhere yourself.
 
 Use a string in `match` for a single category, or an array to merge multiple categories into one group (no blank line between):
 
@@ -74,16 +88,30 @@ For pattern-based groups, use a glob:
 
 First-match-wins across the list, so position determines precedence.
 
+Patterns are [globset](https://docs.rs/globset) globs, **not** minimatch. The difference that matters in practice: a single `*` crosses `/`, so `@app/*` also matches `@app/deep/thing`. Write `@app/*/` style patterns only if you have verified the behavior you want; when in doubt use `**`.
+
+### What counts as one import block
+
+Grouping happens within a contiguous run of import declarations. A run ends at:
+
+- any non-import statement,
+- a side-effect import (`import "./polyfill"`), which is left in place because its position is usually load-order significant,
+- a blank line,
+- **a comment on its own line between two imports.**
+
+Each run is grouped and reordered independently, so imports never move across one of these. The last one is easy to trip over — a stray `// ...` line in the middle of an import block splits it in two, and each half is grouped separately.
+
 ### Migration from ESLint `import/order`
 
 | ESLint option | dprint equivalent |
 |---|---|
 | `groups` | `module.importGroups` (strings; nested arrays merge) |
-| `pathGroups` | `{ "pattern": "..." }` entries placed positionally |
+| `pathGroups` | `{ "pattern": "..." }` entries placed positionally — but see the glob note above, the pattern syntax is not minimatch |
 | `newlines-between: "always"` | Default when feature is enabled |
-| `newlines-between: "never"`/`"ignore"` | Set `module.importGroups` to `[]` (feature off) |
+| `newlines-between: "never"`/`"ignore"` | Not supported. Turning `module.importGroups` off (`[]`) also turns off the reordering, so there is currently no way to group without the blank lines |
 | `alphabetize.order: "asc"` | Existing `module.sortImportDeclarations` |
 | `alphabetize.order: "desc"` | Not supported |
+| `groups: ["internal"]` | No equivalent category; use a `{ "pattern": "..." }` group |
 
 ### Limitations
 
@@ -92,4 +120,6 @@ First-match-wins across the list, so position determines precedence.
 - Descending sort not supported.
 - TS `import X = require(...)` not reordered.
 - Imports inside nested `declare module "..."` bodies are not classified.
-- Currently, an import with `// dprint-ignore` is reordered like any other; barrier treatment is planned for a follow-up.
+- `export ... from "..."` declarations are never grouped. `module.sortExportDeclarations` still applies to them.
+- Blank lines cannot be suppressed between groups; one blank line per boundary is the only mode.
+- Currently, an import with `// dprint-ignore` is reordered like any other, and a `// dprint-ignore-start` / `// dprint-ignore-end` region does not stop reordering either (the markers travel with the import they are attached to). Barrier treatment is planned for a follow-up.
