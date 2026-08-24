@@ -76,8 +76,6 @@ pub struct Context<'a> {
   /// Used for ensuring nodes are parsed in order.
   #[cfg(debug_assertions)]
   pub last_generated_node_pos: SourcePos,
-  #[cfg(debug_assertions)]
-  pub bypass_node_order_check: bool,
   pub diagnostics: Vec<GenerateDiagnostic>,
   pub resolved_import_groups: Option<crate::generation::imports::resolved::ResolvedGroups>,
 }
@@ -115,8 +113,6 @@ impl<'a> Context<'a> {
       expr_stmt_single_line_parent_brace_ref: None,
       #[cfg(debug_assertions)]
       last_generated_node_pos: dprint_swc_ext::common::SourceTextInfoProvider::text_info(&program).range().start.into(),
-      #[cfg(debug_assertions)]
-      bypass_node_order_check: false,
       diagnostics: Vec::new(),
       resolved_import_groups,
     }
