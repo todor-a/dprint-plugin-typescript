@@ -18,6 +18,8 @@ use dprint_swc_ext::swc::parser::Syntax;
 use dprint_swc_ext::view::*;
 use std::rc::Rc;
 
+use super::imports::classify::classify_import;
+use super::imports::partition::partition_indices;
 use super::sorting::*;
 use super::swc::get_flattened_bin_expr;
 use super::swc::*;
@@ -7313,11 +7315,7 @@ fn gen_statements<'a>(inner_range: SourceRange, stmts: Vec<Node<'a>>, context: &
       None => get_node_sorter(stmt_group.kind, context)
         .map(|sorter| sorter.get_sorted_indexes(stmt_group.nodes.iter().map(|n| Some(*n)), context.program)),
     };
-    let subgroup_boundary_set: rustc_hash::FxHashSet<usize> = stmt_group
-      .subgroup_boundaries
-      .as_ref()
-      .map(|bs| bs.iter().copied().collect())
-      .unwrap_or_default();
+    let subgroup_boundaries = stmt_group.subgroup_boundaries.unwrap_or_default();
     for (i, node) in stmt_group.nodes.into_iter().enumerate() {
       let is_empty_stmt = node.is::<EmptyStmt>();
       if !is_empty_stmt {
@@ -7325,7 +7323,7 @@ fn gen_statements<'a>(inner_range: SourceRange, stmts: Vec<Node<'a>>, context: &
         if let Some(last_node) = &last_node {
           separator_items.push_signal(Signal::NewLine);
           let blank_line = if has_subgroup_boundaries {
-            subgroup_boundary_set.contains(&i)
+            subgroup_boundaries.binary_search(&i).is_ok()
           } else {
             node_helpers::has_separating_blank_line(&last_node, &node, context.program)
           };
@@ -7495,13 +7493,12 @@ fn get_stmt_groups<'a>(stmts: Vec<Node<'a>>, context: &mut Context<'a>) -> Vec<S
         .iter()
         .enumerate()
         .map(|(i, node)| {
-          let (src, is_type) = if let Node::ImportDecl(d) = node {
-            (d.src.value().as_str().unwrap_or("").to_string(), d.type_only())
-          } else {
-            (String::new(), false)
+          let (src, is_type) = match node {
+            Node::ImportDecl(d) => (d.src.value().as_str().unwrap_or(""), d.type_only()),
+            _ => ("", false),
           };
-          let idx = crate::generation::imports::classify::classify(
-            &src,
+          let idx = classify_import(
+            src,
             is_type,
             context.config.module_type_imports,
             context.config.module_builtins_runtime,
@@ -7513,7 +7510,7 @@ fn get_stmt_groups<'a>(stmts: Vec<Node<'a>>, context: &mut Context<'a>) -> Vec<S
       let sorter = get_node_sorter_from_order(context.config.module_sort_import_declarations, NamedTypeImportsExportsOrder::None);
       let sort_keys =
         sorter.map(|sorter| (sorter, g.nodes.iter().map(|node| sorter.get_node_sort_key(*node, context.program)).collect::<Vec<_>>()));
-      let (ordered, boundaries) = crate::generation::imports::partition::partition_indices(
+      let (ordered, boundaries) = partition_indices(
         &classified,
         resolved.groups.len(),
         |a_orig: usize, b_orig: usize| -> std::cmp::Ordering {

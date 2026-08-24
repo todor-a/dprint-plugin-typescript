@@ -1,6 +1,7 @@
 //! Compiled form of `module.importGroups` ready for fast classification.
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use rustc_hash::FxHashSet;
 
 use crate::configuration::{BuiltinCategory, Configuration, ImportGroupMatch, ImportMatcher, TypeImportsMode};
 
@@ -18,19 +19,20 @@ pub struct ResolvedGroups {
   pub unknown_index: usize,
 }
 
-/// Compile config's `module.importGroups` into resolved form. Returns `None`
-/// when the feature is disabled (empty list). Appends diagnostic strings on
-/// duplicate categories or invalid globs.
-pub fn compile(config: &Configuration, diagnostics: &mut Vec<String>) -> Option<ResolvedGroups> {
+/// Compile config's `module.importGroups` into resolved form, along with any
+/// diagnostics about duplicate categories or invalid globs. The groups are
+/// `None` when the feature is disabled (empty list).
+pub fn compile(config: &Configuration) -> (Option<ResolvedGroups>, Vec<String>) {
+  let mut diagnostics = Vec::new();
   if config.module_import_groups.is_empty() {
-    return None;
+    return (None, diagnostics);
   }
 
   let interleave_mode = matches!(config.module_type_imports, TypeImportsMode::Interleave);
 
   let mut groups: Vec<ResolvedGroup> = Vec::new();
   let mut explicit_unknown: Option<usize> = None;
-  let mut seen_categories: std::collections::HashSet<BuiltinCategory> = Default::default();
+  let mut seen_categories: FxHashSet<BuiltinCategory> = Default::default();
 
   for (i, group) in config.module_import_groups.iter().enumerate() {
     let matchers = match &group.matchers {
@@ -46,15 +48,11 @@ pub fn compile(config: &Configuration, diagnostics: &mut Vec<String>) -> Option<
       match m {
         ImportMatcher::Category(c) => {
           if *c == BuiltinCategory::Type && interleave_mode {
-            diagnostics.push(format!(
-              "module.importGroups: category \"type\" is ignored under module.typeImports=\"interleave\"."
-            ));
+            diagnostics.push("Category \"type\" is ignored under module.typeImports=\"interleave\".".to_string());
             continue;
           }
           if !seen_categories.insert(*c) {
-            diagnostics.push(format!(
-              "module.importGroups: category {c:?} listed more than once; using first occurrence."
-            ));
+            diagnostics.push(format!("Category {c:?} listed more than once; using first occurrence."));
             continue;
           }
           if *c == BuiltinCategory::Unknown {
@@ -67,7 +65,7 @@ pub fn compile(config: &Configuration, diagnostics: &mut Vec<String>) -> Option<
             builder.add(g);
             has_globs = true;
           }
-          Err(e) => diagnostics.push(format!("module.importGroups: invalid glob `{pattern}`: {e}")),
+          Err(e) => diagnostics.push(format!("Invalid glob `{pattern}`: {e}")),
         },
       }
     }
@@ -91,7 +89,7 @@ pub fn compile(config: &Configuration, diagnostics: &mut Vec<String>) -> Option<
     }
   };
 
-  Some(ResolvedGroups { groups, unknown_index })
+  (Some(ResolvedGroups { groups, unknown_index }), diagnostics)
 }
 
 #[cfg(test)]
@@ -109,8 +107,7 @@ mod tests {
   #[test]
   fn empty_returns_none() {
     let cfg = build(serde_json::json!({}));
-    let mut diags = Vec::new();
-    assert!(compile(&cfg, &mut diags).is_none());
+    assert!(compile(&cfg).0.is_none());
   }
 
   #[test]
@@ -118,8 +115,7 @@ mod tests {
     let cfg = build(serde_json::json!({
       "module.importGroups": [{ "match": "builtin" }]
     }));
-    let mut diags = Vec::new();
-    let r = compile(&cfg, &mut diags).unwrap();
+    let r = compile(&cfg).0.unwrap();
     assert_eq!(r.groups.len(), 2);
     assert_eq!(r.unknown_index, 1);
   }
@@ -132,8 +128,8 @@ mod tests {
         { "match": "builtin" }
       ]
     }));
-    let mut diags = Vec::new();
-    let r = compile(&cfg, &mut diags).unwrap();
+    let (r, diags) = compile(&cfg);
+    let r = r.unwrap();
     assert_eq!(diags.len(), 1);
     assert_eq!(r.groups[0].categories, vec![BuiltinCategory::Builtin]);
     assert!(r.groups[1].categories.is_empty());
@@ -145,8 +141,7 @@ mod tests {
       "module.importGroups": [{ "match": "external" }, { "match": "type" }],
       "module.typeImports": "interleave"
     }));
-    let mut diags = Vec::new();
-    let _ = compile(&cfg, &mut diags).unwrap();
+    let (_, diags) = compile(&cfg);
     assert!(diags.iter().any(|d| d.contains("type") && d.contains("interleave")));
   }
 }

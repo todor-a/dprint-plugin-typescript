@@ -89,8 +89,8 @@ impl<'a> Context<'a> {
     config: &'a Configuration,
     external_formatter: Option<&'a ExternalFormatter>,
   ) -> Context<'a> {
-    let mut _import_group_diags: Vec<String> = Vec::new();
-    let resolved_import_groups = crate::generation::imports::resolved::compile(config, &mut _import_group_diags);
+    // diagnostics were already surfaced when the configuration was resolved
+    let (resolved_import_groups, _) = crate::generation::imports::resolved::compile(config);
     Context {
       syntax,
       program,

@@ -341,15 +341,12 @@ pub fn resolve_config(config: ConfigKeyMap, global_config: &GlobalConfiguration)
 
   diagnostics.extend(get_unknown_property_diagnostics(config));
 
-  if !resolved_config.module_import_groups.is_empty() {
-    let mut compile_diags: Vec<String> = Vec::new();
-    let _ = crate::generation::imports::resolved::compile(&resolved_config, &mut compile_diags);
-    for msg in compile_diags {
-      diagnostics.push(ConfigurationDiagnostic {
-        property_name: "module.importGroups".to_string(),
-        message: msg,
-      });
-    }
+  let (_, compile_diags) = crate::generation::imports::resolved::compile(&resolved_config);
+  for message in compile_diags {
+    diagnostics.push(ConfigurationDiagnostic {
+      property_name: "module.importGroups".to_string(),
+      message,
+    });
   }
 
   return ResolveConfigurationResult {

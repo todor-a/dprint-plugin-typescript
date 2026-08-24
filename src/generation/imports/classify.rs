@@ -5,7 +5,7 @@ use crate::generation::imports::resolved::ResolvedGroups;
 use crate::utils::builtins::is_builtin;
 
 /// Classify a single import: return the index in `resolved.groups`.
-pub fn classify(
+pub fn classify_import(
   src: &str,
   is_type_only: bool,
   type_imports_mode: TypeImportsMode,
@@ -69,9 +69,8 @@ mod tests {
   fn classify_with(json: serde_json::Value, src: &str, is_type: bool) -> usize {
     let map: ConfigKeyMap = serde_json::from_value(json).unwrap();
     let cfg = resolve_config(map, &Default::default()).config;
-    let mut diags = Vec::new();
-    let r = compile(&cfg, &mut diags).unwrap();
-    classify(src, is_type, cfg.module_type_imports, cfg.module_builtins_runtime, &r)
+    let r = compile(&cfg).0.unwrap();
+    classify_import(src, is_type, cfg.module_type_imports, cfg.module_builtins_runtime, &r)
   }
 
   fn eslint_mirror() -> serde_json::Value {
