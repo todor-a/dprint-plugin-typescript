@@ -96,10 +96,26 @@ Grouping happens within a contiguous run of import declarations. A run ends at:
 
 - any non-import statement,
 - a side-effect import (`import "./polyfill"`), which is left in place because its position is usually load-order significant,
+- an import preceded by a `// dprint-ignore` comment (see below),
 - a blank line,
 - **a comment on its own line between two imports.**
 
 Each run is grouped and reordered independently, so imports never move across one of these. The last one is easy to trip over — a stray `// ...` line in the middle of an import block splits it in two, and each half is grouped separately.
+
+### Pinning an import
+
+A `// dprint-ignore` comment on an import pins it: it stays at its position and ends the run around it, so the imports before it and the imports after it are each grouped on their own.
+
+```ts
+// dprint-ignore
+import { keepMeFirst } from "./bootstrap";
+import { b } from "bbb";
+import { a } from "aaa";
+```
+
+The pinned import does not move, and `aaa`/`bbb` still group and sort normally. This applies to `module.sortImportDeclarations` and `module.sortExportDeclarations` too, not only to grouping.
+
+`// dprint-ignore-start` and `// dprint-ignore-end` are matched by the same check, so they pin whichever declaration follows them. This plugin has no notion of an ignored *region*, though — the declarations between the two markers are not otherwise protected.
 
 ### Migration from ESLint `import/order`
 
@@ -112,6 +128,7 @@ Each run is grouped and reordered independently, so imports never move across on
 | `alphabetize.order: "asc"` | Existing `module.sortImportDeclarations` |
 | `alphabetize.order: "desc"` | Not supported |
 | `groups: ["internal"]` | No equivalent category; use a `{ "pattern": "..." }` group |
+| `// eslint-disable-next-line import/order` | `// dprint-ignore` on the import |
 
 ### Limitations
 
@@ -122,4 +139,4 @@ Each run is grouped and reordered independently, so imports never move across on
 - Imports inside nested `declare module "..."` bodies are not classified.
 - `export ... from "..."` declarations are never grouped. `module.sortExportDeclarations` still applies to them.
 - Blank lines cannot be suppressed between groups; one blank line per boundary is the only mode.
-- Currently, an import with `// dprint-ignore` is reordered like any other, and a `// dprint-ignore-start` / `// dprint-ignore-end` region does not stop reordering either (the markers travel with the import they are attached to). Barrier treatment is planned for a follow-up.
+- There is no ignored-*region* concept, so `// dprint-ignore-start` / `// dprint-ignore-end` only pins the declaration directly after each marker rather than everything between them.

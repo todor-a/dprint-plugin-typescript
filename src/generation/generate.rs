@@ -7434,6 +7434,13 @@ struct StmtGroup<'a> {
   sorted_indexes: Option<utils::VecMap<usize>>,
 }
 
+/// Whether one of the declaration's leading comments asks for it to be ignored.
+fn has_dprint_ignore_comment(node: Node, context: &Context) -> bool {
+  node
+    .leading_comments_fast(context.program)
+    .any(|comment| ir_helpers::text_has_dprint_ignore(&comment.text, &context.config.ignore_node_comment_text))
+}
+
 fn get_stmt_groups<'a>(stmts: Vec<Node<'a>>, context: &mut Context<'a>) -> Vec<StmtGroup<'a>> {
   let mut groups: Vec<StmtGroup<'a>> = Vec::new();
   let mut current_group: Option<StmtGroup> = None;
@@ -7441,11 +7448,17 @@ fn get_stmt_groups<'a>(stmts: Vec<Node<'a>>, context: &mut Context<'a>) -> Vec<S
 
   for stmt in stmts {
     let last_end_line = previous_last_end_line.take();
-    let stmt_group_kind = match stmt {
-      Node::ImportDecl(decl) if !decl.specifiers.is_empty() => StmtGroupKind::Imports,
-      Node::ExportAll(_) => StmtGroupKind::Exports,
-      Node::NamedExport(NamedExport { src: Some(_), .. }) => StmtGroupKind::Exports,
-      _ => StmtGroupKind::Other,
+    let stmt_group_kind = if has_dprint_ignore_comment(stmt, context) {
+      // an ignored declaration is a barrier: it stays where it is and ends the
+      // run around it, the same way a side-effect import does
+      StmtGroupKind::Other
+    } else {
+      match stmt {
+        Node::ImportDecl(decl) if !decl.specifiers.is_empty() => StmtGroupKind::Imports,
+        Node::ExportAll(_) => StmtGroupKind::Exports,
+        Node::NamedExport(NamedExport { src: Some(_), .. }) => StmtGroupKind::Exports,
+        _ => StmtGroupKind::Other,
+      }
     };
     previous_last_end_line = match stmt_group_kind {
       StmtGroupKind::Imports | StmtGroupKind::Exports => Some(stmt.end_line_fast(context.program)),

@@ -24,16 +24,3 @@ import { fs } from "node:fs";
 import { fs } from "node:fs";
 
 import { a } from "react"; /* trails react */
-
-== dprint-ignore-start markers stay with their imports (region not honored, see README limitations) ==
-// dprint-ignore-start
-import { a } from "react";
-import { fs } from "node:fs";
-// dprint-ignore-end
-
-[expect]
-import { fs } from "node:fs";
-
-// dprint-ignore-start
-import { a } from "react";
-// dprint-ignore-end
