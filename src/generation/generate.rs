@@ -7493,13 +7493,11 @@ fn get_stmt_groups<'a>(stmts: Vec<Node<'a>>, context: &mut Context<'a>) -> Vec<S
         .iter()
         .enumerate()
         .map(|(i, node)| {
-          let (src, is_type) = match node {
-            Node::ImportDecl(d) => (d.src.value().as_str().unwrap_or(""), d.type_only()),
-            _ => ("", false),
-          };
+          // an Imports group only ever holds import declarations
+          let Node::ImportDecl(d) = node else { unreachable!() };
           let idx = classify_import(
-            src,
-            is_type,
+            d.src.value().as_str().unwrap_or(""),
+            d.type_only(),
             context.config.module_type_imports,
             context.config.module_builtins_runtime,
             resolved,

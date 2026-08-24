@@ -70,11 +70,15 @@ pub fn compile(config: &Configuration) -> (Option<ResolvedGroups>, Vec<String>) 
       }
     }
 
-    groups.push(ResolvedGroup {
-      categories,
-      globs: builder.build().unwrap_or_else(|_| GlobSet::empty()),
-      has_globs,
-    });
+    let globs = match builder.build() {
+      Ok(globs) => globs,
+      Err(err) => {
+        diagnostics.push(format!("Could not build the glob set for group {i}: {err}"));
+        has_globs = false;
+        GlobSet::empty()
+      }
+    };
+    groups.push(ResolvedGroup { categories, globs, has_globs });
   }
 
   let unknown_index = match explicit_unknown {
@@ -133,6 +137,19 @@ mod tests {
     assert_eq!(diags.len(), 1);
     assert_eq!(r.groups[0].categories, vec![BuiltinCategory::Builtin]);
     assert!(r.groups[1].categories.is_empty());
+  }
+
+  #[test]
+  fn invalid_glob_diagnostic_leaves_the_group_empty() {
+    let cfg = build(serde_json::json!({
+      "module.importGroups": [{ "match": { "pattern": "[unclosed" } }, { "match": "external" }]
+    }));
+    let (r, diags) = compile(&cfg);
+    let r = r.unwrap();
+    assert_eq!(diags.len(), 1);
+    assert!(diags[0].contains("Invalid glob `[unclosed`"), "{:?}", diags[0]);
+    assert!(r.groups[0].categories.is_empty());
+    assert!(!r.groups[0].has_globs);
   }
 
   #[test]
